@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Draggable from 'react-draggable';
 
@@ -15,6 +16,7 @@ import CodeIcon from './components/icons/CodeIcon';
 import HybridSimIcon from './components/icons/HybridSimIcon';
 import SandboxIcon from './components/icons/SandboxIcon';
 import CppIcon from './components/icons/CppIcon';
+import AmazonMusicIcon from './components/icons/AmazonMusicIcon';
 
 
 // --- App Content Components ---
@@ -155,7 +157,7 @@ const HybridSimContent = () => {
     const startSim = () => {
         if (simIntervalRef.current) return;
         setSimState(s => ({ ...s, isRunning: true }));
-        simIntervalRef.current = setInterval(() => {
+        simIntervalRef.current = window.setInterval(() => {
             setSimState(s => {
                 const { throttle, braking } = controls;
                 const modeMultipliers = { Eco: 0.8, Sport: 1.2, Efficiency: 1.0 };
@@ -341,7 +343,7 @@ const CppEngineContent = () => {
             if (simIntervalRef.current) clearInterval(simIntervalRef.current);
             simIntervalRef.current = null;
         } else {
-            simIntervalRef.current = setInterval(() => {
+            simIntervalRef.current = window.setInterval(() => {
                 setSimState(s => ({
                     ...s,
                     speed: Math.max(0, s.speed + (Math.random() - 0.4) * 5),
@@ -401,12 +403,29 @@ interface WindowState {
     prevPos: WindowPosition;
 }
 
-const appConfig = {
+// FIX: Add discriminated union type for appConfig to ensure type safety when accessing properties like 'isLink' and 'url'.
+interface AppWithContentConfig {
+    icon: React.ElementType;
+    content: React.ElementType;
+    defaultSize: { width: number; height: number };
+    isLink?: false;
+}
+
+interface AppAsLinkConfig {
+    icon: React.ElementType;
+    isLink: true;
+    url: string;
+}
+
+type AppConfigItem = AppWithContentConfig | AppAsLinkConfig;
+
+const appConfig: Record<string, AppConfigItem> = {
     'Finder': { icon: FinderIcon, content: FinderContent, defaultSize: { width: 500, height: 400 } },
     'Weather': { icon: WeatherIcon, content: WeatherContent, defaultSize: { width: 350, height: 350 } },
     'Installer': { icon: InstallerIcon, content: InstallerContent, defaultSize: { width: 400, height: 300 } },
     'Photos': { icon: PhotosIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
     'Music': { icon: MusicIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
+    'Amazon Music': { icon: AmazonMusicIcon, isLink: true, url: 'https://music.amazon.com' },
     'Calendar': { icon: CalendarIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
     'Settings': { icon: SettingsIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
     'System Profiler': { icon: SystemProfilerIcon, content: SystemProfilerContent, defaultSize: { width: 450, height: 350 } },
@@ -418,7 +437,7 @@ const appConfig = {
 
 // FIX: Add props type for Window component for type safety.
 interface WindowProps {
-    app: typeof appConfig[keyof typeof appConfig];
+    app: AppConfigItem;
     state: WindowState;
     onClose: () => void;
     onMinimize: () => void;
@@ -429,6 +448,11 @@ interface WindowProps {
 
 const Window = ({ app, state, onClose, onMinimize, onMaximize, onFocus }: WindowProps) => {
     const nodeRef = useRef(null);
+    
+    // FIX: Type guard to ensure app has content before rendering a window.
+    if (!('content' in app)) {
+        return null;
+    }
     const Content = app.content;
 
     return (
@@ -497,32 +521,40 @@ const App = () => {
     const openApp = (id: string) => {
         setBouncingApp(id);
         setTimeout(() => setBouncingApp(null), 500);
-
-        if (windows[id] && windows[id].isMinimized) {
-            restoreWindow(id);
-            return;
+        
+        const config = appConfig[id];
+// FIX: Restructure to handle app links and windowed apps in separate branches.
+// This ensures that `config` is correctly typed when creating a new window,
+// resolving errors when accessing `config.defaultSize`.
+        if ('content' in config) {
+            if (windows[id] && windows[id].isMinimized) {
+                restoreWindow(id);
+                return;
+            }
+    
+            if (windows[id]) {
+                focusWindow(id);
+                return;
+            }
+    
+            const newZIndex = Math.max(0, ...Object.values(windows).map(w => w.zIndex)) + 1;
+            setWindows(prev => ({
+                ...prev,
+                [id]: {
+                    id,
+                    position: { x: 100 + Object.keys(prev).length * 20, y: 100 + Object.keys(prev).length * 20 },
+                    size: config.defaultSize,
+                    isMinimized: false,
+                    isMaximized: false,
+                    isClosing: false,
+                    zIndex: newZIndex,
+                    prevSize: config.defaultSize,
+                    prevPos: { x: 100 + Object.keys(prev).length * 20, y: 100 + Object.keys(prev).length * 20 },
+                },
+            }));
+        } else {
+            window.open(config.url, '_blank', 'noopener,noreferrer');
         }
-
-        if (windows[id]) {
-            focusWindow(id);
-            return;
-        }
-
-        const newZIndex = Math.max(0, ...Object.values(windows).map(w => w.zIndex)) + 1;
-        setWindows(prev => ({
-            ...prev,
-            [id]: {
-                id,
-                position: { x: 100 + Object.keys(prev).length * 20, y: 100 + Object.keys(prev).length * 20 },
-                size: appConfig[id].defaultSize,
-                isMinimized: false,
-                isMaximized: false,
-                isClosing: false,
-                zIndex: newZIndex,
-                prevSize: appConfig[id].defaultSize,
-                prevPos: { x: 100 + Object.keys(prev).length * 20, y: 100 + Object.keys(prev).length * 20 },
-            },
-        }));
     };
     
     const closeWindow = (id: string) => {
@@ -614,15 +646,15 @@ const App = () => {
             ))}
 
             <div className="dock absolute bottom-2.5 left-1/2 -translate-x-1/2 bg-white/15 backdrop-blur-2xl rounded-2xl p-2 flex gap-2 border border-white/10">
-                {Object.entries(appConfig).map(([id, { icon: Icon }]) => (
+                {Object.entries(appConfig).map(([id, config]) => (
                     <div
                         key={id}
                         onClick={() => openApp(id)}
                         className={`w-14 h-14 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-200 relative
                             ${bouncingApp === id ? 'animate-bounce' : 'hover:scale-125'}`}
                     >
-                        <div className="w-12 h-12 p-1"><Icon /></div>
-                        {windows[id] && !windows[id].isClosing && <div className="absolute bottom-[-6px] w-1.5 h-1.5 bg-white rounded-full"></div>}
+                        <div className="w-12 h-12 p-1"><config.icon /></div>
+                        {!config.isLink && windows[id] && !windows[id].isClosing && <div className="absolute bottom-[-6px] w-1.5 h-1.5 bg-white rounded-full"></div>}
                     </div>
                 ))}
             </div>
