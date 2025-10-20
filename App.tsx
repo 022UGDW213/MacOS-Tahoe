@@ -89,13 +89,47 @@ const InstallerContent = () => {
     );
 };
 
-const SettingsContent = () => (
+const wallpapers = [
+    { id: 'default', name: 'Tahoe Blue', style: { background: 'radial-gradient(circle at 30% 70%, rgba(74, 144, 226, 0.3) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.2) 0%, transparent 50%), linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)' } },
+    { id: 'sunset', name: 'Sierra Sunset', style: { background: 'linear-gradient(135deg, rgb(255, 126, 95) 0%, rgb(254, 180, 123) 100%)' } },
+    { id: 'forest', name: 'Pine Forest', style: { background: 'linear-gradient(135deg, rgb(19, 78, 94) 0%, rgb(113, 178, 128) 100%)' } },
+    { id: 'night', name: 'Starry Night', style: { background: 'linear-gradient(135deg, rgb(35, 37, 38) 0%, rgb(65, 67, 69) 100%)' } },
+    { id: 'lake', name: 'Emerald Bay', style: { backgroundImage: 'url(https://images.unsplash.com/photo-1549442191-744535639487?q=80&w=1280&auto=format&fit=crop)', backgroundSize: 'cover', backgroundPosition: 'center' } },
+    { id: 'snow', name: 'Fresh Powder', style: { backgroundImage: 'url(https://images.unsplash.com/photo-1517282133856-1b5e2a2f8b5f?q=80&w=1280&auto=format&fit=crop)', backgroundSize: 'cover', backgroundPosition: 'center' } },
+];
+
+
+const PlaceholderContent = ({ appName, icon: IconComponent }: { appName: string; icon: React.ElementType }) => (
     <div className="p-6 text-white flex items-center justify-center h-full flex-col gap-4">
-        <SettingsIcon />
-        <h2 className="text-lg font-semibold">Settings</h2>
-        <p className="text-sm opacity-80 text-center">System settings can be configured here.</p>
+        <div className="w-16 h-16"><IconComponent /></div>
+        <h2 className="text-lg font-semibold">{appName}</h2>
+        <p className="text-sm opacity-80 text-center">Functionality for {appName} is not yet implemented.</p>
     </div>
 );
+
+const PhotosContent = () => <PlaceholderContent appName="Photos" icon={PhotosIcon} />;
+const MusicContent = () => <PlaceholderContent appName="Music" icon={MusicIcon} />;
+const CalendarContent = () => <PlaceholderContent appName="Calendar" icon={CalendarIcon} />;
+
+const SettingsContent = ({ currentWallpaperId, onWallpaperChange }: { currentWallpaperId: string, onWallpaperChange: (id: string) => void}) => {
+    return (
+        <div className="p-4 text-white h-full overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4 px-2">Desktop Wallpaper</h2>
+            <div className="grid grid-cols-3 gap-4">
+                {wallpapers.map(wallpaper => (
+                    <div key={wallpaper.id} onClick={() => onWallpaperChange(wallpaper.id)} className="cursor-pointer group">
+                        <div
+                            className={`aspect-video rounded-md border-2 transition-all ${currentWallpaperId === wallpaper.id ? 'border-blue-500' : 'border-transparent group-hover:border-white/50'}`}
+                            style={wallpaper.style}
+                        ></div>
+                        <p className="text-xs text-center mt-1 opacity-80">{wallpaper.name}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 
 const SystemProfilerContent = () => (
     <div className="p-4 text-white font-mono text-xs overflow-auto h-full bg-black/20">
@@ -423,11 +457,11 @@ const appConfig: Record<string, AppConfigItem> = {
     'Finder': { icon: FinderIcon, content: FinderContent, defaultSize: { width: 500, height: 400 } },
     'Weather': { icon: WeatherIcon, content: WeatherContent, defaultSize: { width: 350, height: 350 } },
     'Installer': { icon: InstallerIcon, content: InstallerContent, defaultSize: { width: 400, height: 300 } },
-    'Photos': { icon: PhotosIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
-    'Music': { icon: MusicIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
+    'Photos': { icon: PhotosIcon, content: PhotosContent, defaultSize: { width: 400, height: 300 } },
+    'Music': { icon: MusicIcon, content: MusicContent, defaultSize: { width: 400, height: 300 } },
     'Amazon Music': { icon: AmazonMusicIcon, isLink: true, url: 'https://music.amazon.com' },
-    'Calendar': { icon: CalendarIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
-    'Settings': { icon: SettingsIcon, content: SettingsContent, defaultSize: { width: 400, height: 300 } },
+    'Calendar': { icon: CalendarIcon, content: CalendarContent, defaultSize: { width: 400, height: 300 } },
+    'Settings': { icon: SettingsIcon, content: SettingsContent, defaultSize: { width: 550, height: 350 } },
     'System Profiler': { icon: SystemProfilerIcon, content: SystemProfilerContent, defaultSize: { width: 450, height: 350 } },
     'Code Editor': { icon: CodeIcon, content: CodeEditorContent, defaultSize: { width: 500, height: 400 } },
     'Hybrid Sim': { icon: HybridSimIcon, content: HybridSimContent, defaultSize: { width: 600, height: 550 } },
@@ -443,10 +477,12 @@ interface WindowProps {
     onMinimize: () => void;
     onMaximize: () => void;
     onFocus: () => void;
+    wallpaperId: string;
+    setWallpaperId: (id: string) => void;
 }
 
 
-const Window = ({ app, state, onClose, onMinimize, onMaximize, onFocus }: WindowProps) => {
+const Window = ({ app, state, onClose, onMinimize, onMaximize, onFocus, wallpaperId, setWallpaperId }: WindowProps) => {
     const nodeRef = useRef(null);
     
     // FIX: Type guard to ensure app has content before rendering a window.
@@ -454,6 +490,13 @@ const Window = ({ app, state, onClose, onMinimize, onMaximize, onFocus }: Window
         return null;
     }
     const Content = app.content;
+    
+    const contentProps: any = {};
+    if (state.id === 'Settings') {
+        contentProps.currentWallpaperId = wallpaperId;
+        contentProps.onWallpaperChange = setWallpaperId;
+    }
+
 
     return (
         <Draggable
@@ -492,7 +535,7 @@ const Window = ({ app, state, onClose, onMinimize, onMaximize, onFocus }: Window
                     <div style={{ width: '60px' }}></div>
                 </div>
                 <div className="window-content h-[calc(100%-2rem)]">
-                    <Content />
+                    <Content {...contentProps} />
                 </div>
             </div>
         </Draggable>
@@ -505,6 +548,9 @@ const App = () => {
     // FIX: Type the windows state to resolve property access errors on 'unknown'.
     const [windows, setWindows] = useState<Record<string, WindowState>>({});
     const [bouncingApp, setBouncingApp] = useState<string | null>(null);
+    const [wallpaperId, setWallpaperId] = useState('default');
+
+    const currentWallpaperStyle = wallpapers.find(w => w.id === wallpaperId)?.style || wallpapers[0].style;
 
     const updateTime = useCallback(() => {
         const now = new Date();
@@ -616,7 +662,7 @@ const App = () => {
 
     return (
         <div className="desktop h-screen w-screen overflow-hidden relative text-white">
-            <div className="tahoe-background absolute inset-0 bg-gradient-to-br from-indigo-900 to-blue-900" style={{background: 'radial-gradient(circle at 30% 70%, rgba(74, 144, 226, 0.3) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.2) 0%, transparent 50%), linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)'}}></div>
+            <div className="tahoe-background absolute inset-0 bg-gradient-to-br from-indigo-900 to-blue-900 transition-all duration-500" style={currentWallpaperStyle}></div>
             
             <div className="menu-bar h-[25px] bg-white/15 backdrop-blur-2xl border-b border-white/10 flex justify-between items-center px-5 text-sm font-medium">
                 <div className="flex gap-5">
@@ -642,6 +688,8 @@ const App = () => {
                     onMinimize={() => minimizeWindow(win.id)}
                     onMaximize={() => toggleMaximize(win.id)}
                     onFocus={() => focusWindow(win.id)}
+                    wallpaperId={wallpaperId}
+                    setWallpaperId={setWallpaperId}
                 />
             ))}
 
